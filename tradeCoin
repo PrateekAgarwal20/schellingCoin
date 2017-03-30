@@ -1,0 +1,144 @@
+pragma solidity ^0.4.8;
+
+
+contract token{
+    uint256 public totalSupply;
+    mapping (address => uint256) public balanceOf;
+    mapping (address => mapping (address => uint256)) approvals;
+
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+
+    function token (uint256 _totalSupply, uint _award) {
+        totalSupply = _totalSupply;
+        award = _award;
+    }
+
+    // returns the totalSupply of the system
+    function totalSupply() constant returns (uint256 totalSupply) {
+        return totalSupply;
+    }
+
+    // returns the balance of the queried account
+    function balanceOf(address _owner) constant returns (uint256 balance) {
+        return balanceOf[_owner];
+    }
+
+    // send tokens to another address
+    function transfer(address _to, uint256 _value) returns (bool success) {
+        if(balanceOf[_to] < _value) return false;
+
+        balanceOf[msg.sender] -= _value;
+        balanceOf[_to] += _value;
+
+        Transfer(msg.sender, _to, _value);
+        return true;
+    }
+
+    // transfer tokens on behalf of another user
+    // This transfer can only happen if they are an
+    // approved spender by the owner of the account.
+    // Even if they are approved, they are only allowed
+    // to spend up to the amount allowed by the owner.
+    function transferFrom(address _from, address _to, uint256 _value) returns (bool success){
+        // If they attempt to spend more than their allowance
+        if(approvals[_from][msg.sender] < _value) return false;
+        // If there isn't enough money in the account
+        if(balanceOf[_from] < _value) return false;
+
+        balanceOf[_from] = balanceOf[_from] - _value;
+        balanceOf[_to] = balanceOf[_to] + _value;
+        approvals[_from][msg.sender] = approvals[_from][msg.sender] - _value;
+
+        Transfer(_from, _to, _value);
+        return true;
+    }
+
+    // allow another user to transfer tokens on your
+    // behalf. Once given allowance, they can transfer
+    // as many times as they want up to the amount they
+    // are approved for. If called again, the allowance
+    // amount should be overwritten.
+    function approve(address _spender, uint256 _value) returns (bool success) {
+        if(balanceOf(msg.sender) < _value) return false;
+        
+        approvals[msg.sender][_spender] = _value;
+
+        Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    // returns the amount a user is allowed to spend
+    // on behalf of another user.
+    function allowance(address _owner, address _spender) constant returns (uint256 remaining){
+        return approvals[_owner][_spender];
+    }
+
+    //_________________________________________________________________________
+
+    // Type of a data source, the variables they
+    // keep track of
+    struct DataSource {
+        address ds;
+        mapping (string => uint) sharePrices;
+    }
+
+    event PriceUpdate(string compName, uint newPrice);
+
+    DataSource [] dataSources;
+    mapping (string => uint) sharePrices;
+    uint award;
+
+    // Updates the price of the stock in question
+    // by getting the price of the stock from
+    // each data source, sorting them, then averaging
+    // the results within the 25th and 75th percentile
+    // and rewarding the data sources resoponsible
+    // for these intermediate values.
+    function updatePrice(string compName){
+        uint [] memory inputPrices = new uint[](dataSources.length);
+        address [] memory inputAddresses = new address[](dataSources.length);
+
+        // get values from data sources
+        for(uint i = 0; i < dataSources.length; i++){
+            inputPrices[i] = dataSources[i].sharePrices[compName];
+        }
+
+        // sort values from data sources (increasing)
+        for(uint j = 1; j < inputPrices.length; j++){
+            if(inputPrices[j] < inputPrices[j-1]){
+                uint temp = inputPrices[j-1];
+                inputPrices[j-1] = inputPrices[j];
+                inputPrices[j] = temp;
+                delete temp;
+
+                address tempAddress = inputAddresses[j-1];
+                inputAddresses[j-1] = inputAddresses[j];
+                inputAddresses[j] = tempAddress;
+                delete tempAddress;
+                j = 1;
+            }
+        }
+
+        // use middle 50% to determine average and award the
+        // sources that provide the middle 50% data
+        uint quartile = uint(inputPrices.length/4);
+        uint sumMiddle;
+        for(uint k = 0; k < inputAddresses.length; k++){
+            if(k >= quartile && k <= inputAddresses.length-quartile) {
+                balanceOf[inputAddresses[k]] += award;
+                sumMiddle += inputPrices[k];
+            } else {
+                balanceOf[inputAddresses[k]] -= award;
+            }
+        }
+
+        uint averagePrice = sumMiddle/(quartile*2);
+        sharePrices[compName] = averagePrice;
+
+        delete inputAddresses;
+        delete inputPrices;
+
+        PriceUpdate(compName, averagePrice);
+    }
+}
